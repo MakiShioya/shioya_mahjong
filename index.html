@@ -145,17 +145,18 @@
 
     <div class="hand-area my-turn" id="myHandArea"></div>
 
-    <script type="module">
+   <script type="module">
         import Majiang from '@kobalab/majiang-core';
 
         let gameState = { kyoku: 1, honba: 0, kyotaku: 0, currentOya: 0, startingOya: 0 };
         let mountain = []; let currentTurn = 0; 
         
+        // ★修正1：各プレイヤーに aiType（性格）を追加
         let players = [
-            { id: 0, name: "あなた", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false },
-            { id: 1, name: "CPU(右)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false },
-            { id: 2, name: "CPU(前)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false },
-            { id: 3, name: "CPU(左)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false }
+            { id: 0, name: "あなた", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "human" },
+            { id: 1, name: "CPU(右)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" },
+            { id: 2, name: "CPU(前)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" },
+            { id: 3, name: "CPU(左)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" }
         ];
 
         let isRiichiMode = false; let validRiichiDiscards = []; let pendingNaki = null;
@@ -456,6 +457,7 @@
         }
 
         function checkCPUActions(discarderIndex, discardedPai) {
+            // ロンチェックは全キャラ共通で実行（役がある場合のみアガる）
             for (let i = 1; i < 4; i++) {
                 if (i === discarderIndex) continue;
                 let cp = players[i]; let shoupai = Majiang.Shoupai.fromString(getMajiangString(cp.hand, null, cp.fulou));
@@ -473,9 +475,15 @@
                 }
             }
 
+            // 鳴きチェック
             for (let i = 1; i < 4; i++) {
                 if (i === discarderIndex) continue;
-                let cp = players[i]; if (cp.isRiichi) continue;
+                let cp = players[i]; 
+                if (cp.isRiichi) continue;
+                
+                // ★修正2：性格が「menzen」なら鳴き処理を一切行わない
+                if (cp.aiType === "menzen") continue;
+                
                 let handStr = getMajiangString(cp.hand, null, cp.fulou); let shoupai = Majiang.Shoupai.fromString(handStr);
                 let currentShanten = Majiang.Util.xiangting(shoupai);
                 
@@ -574,12 +582,11 @@
             if (currentTurn !== 0) setTimeout(() => { executeCPUTurn(currentTurn); }, 400); 
         }
 
-        // --- ★追加：牌の価値を計算して、CPUに「人間らしい選択」をさせる ---
         function getTileValue(tile) {
-            if (tile.suit === 'z') return 1; // 字牌は一番価値が低い（真っ先に捨てる）
-            if (tile.num === 1 || tile.num === 9) return 2; // 端牌
+            if (tile.suit === 'z') return 1; 
+            if (tile.num === 1 || tile.num === 9) return 2; 
             if (tile.num === 2 || tile.num === 8) return 3; 
-            return 4; // 3~7の牌は大事にする
+            return 4; 
         }
 
         function executeCPUTurn(cpuIndex) {
@@ -587,10 +594,21 @@
             let handStr = getMajiangString(p.hand, p.tsumo, p.fulou);
             let shoupai = Majiang.Shoupai.fromString(handStr);
             
+            // ツモアガリができるかチェック
             if (Majiang.Util.xiangting(shoupai) === -1) {
                 let param = { rule: Majiang.rule(), zhuangfeng: 0, menfeng: (cpuIndex - gameState.currentOya + 4)%4, hupai: { lizhi: p.isRiichi ? 1 : 0 }, baopai: ['m1'], fubaopai: [], jicun: { changbang: 0, lizhibang: 0 } };
                 let hule = Majiang.Util.hule(shoupai, null, param);
-                if (hule) { setTimeout(() => executeAgari('tsumo', cpuIndex, hule), 400); return; }
+                
+                if (hule) { 
+                    // 役がある場合：見事アガリ！
+                    setTimeout(() => executeAgari('tsumo', cpuIndex, hule), 400); 
+                    return; 
+                } else {
+                    // ★修正3：役なしで手が完成（シャンテン数-1）してしまった場合のセーフティ
+                    // アガれないと悟って、ツモった牌をそのまま捨てて形式テンパイを維持する
+                    discardPai(cpuIndex, p.tsumo, true);
+                    return;
+                }
             }
 
             if (p.isRiichi) { discardPai(cpuIndex, p.tsumo, true); return; }
@@ -609,7 +627,6 @@
                 }
             }
             
-            // ★改良：同じシャンテン数なら、一番「価値の低い牌（字牌など）」を選ぶ
             bestTiles.sort((a, b) => getTileValue(a) - getTileValue(b));
             let lowestValue = getTileValue(bestTiles[0]);
             let candidates = bestTiles.filter(t => getTileValue(t) === lowestValue);
@@ -617,6 +634,7 @@
             let chosenPai = candidates[Math.floor(Math.random() * candidates.length)];
             let isTsumo = (chosenPai.id === p.tsumo.id);
 
+            // 門前でテンパイ（シャンテン数0）なら即リーチをかける
             if (minShanten === 0 && p.fulou.length === 0 && p.score >= 1000) {
                 p.isRiichi = true; p.score -= 1000; gameState.kyotaku++;
                 chosenPai.isRiichiDeclare = true; updateScoresUI();
@@ -665,14 +683,12 @@
                 });
             }
 
-            // ★追加：デバッグ用にCPUの牌を画面上に並べて表示する
             for (let i = 1; i < 4; i++) {
                 const cpuArea = document.getElementById(`cpuHand-${i}`);
                 if (cpuArea) {
                     cpuArea.innerHTML = '';
                     players[i].hand.forEach(pai => {
                         const img = document.createElement('img');
-                        // 開発者が見やすいように、全部「正面向き」の画像を使う
                         img.src = getPaiImagePath(pai.suit, pai.num, 0); 
                         img.className = 'cpu-pai-debug';
                         cpuArea.appendChild(img);
