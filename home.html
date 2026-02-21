@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+  <title>しおや麻雀 - ホーム</title>
+  
+  <style>
+    /* ==========================================
+       共通設定・フォント
+       ========================================== */
+    @font-face {
+      font-family: 'SetoFont';
+      src: url('font/setofont.ttf') format('truetype');
+      font-display: block;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'SetoFont', "Hiragino Kaku Gothic ProN", sans-serif; }
+    
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background-color: #1e5631; /* 麻雀マットの緑 */
+      overscroll-behavior: none; user-select: none; -webkit-touch-callout: none; touch-action: none;
+    }
+
+    #bg-image {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100%; z-index: -1;
+      background-image: radial-gradient(#2a7743 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    /* ==========================================
+       ローディング画面
+       ========================================== */
+    #loading-screen {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: #432517; display: flex; justify-content: center; align-items: center;
+      z-index: 9999; transition: opacity 0.5s ease;
+    }
+    .loader-content { text-align: center; color: #ECDBBF; }
+    .spinner {
+      width: 50px; height: 50px; border: 5px solid rgba(236, 219, 191, 0.3);
+      border-top: 5px solid #ECDBBF; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    #loading-tips {
+      margin-top: 20px; padding: 10px 20px; background: rgba(236, 219, 191, 0.1); 
+      border-radius: 10px; font-size: 0.9rem; max-width: 250px; line-height: 1.5; min-height: 3em; color: #ECDBBF;
+    }
+
+    /* ==========================================
+       UIパーツ
+       ========================================== */
+    .user-info-bar {
+      position: absolute; top: 0; width: 100%; padding: 10px 20px; 
+      background: rgba(67, 37, 23, 0.9); color: #ECDBBF; border-bottom: 3px solid #ff9800;
+      display: flex; justify-content: space-between; align-items: center; z-index: 5;
+    }
+    .user-name { font-weight: bold; font-size: 1.1rem; }
+    
+    .character-stand {
+      position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+      height: 85vh; width: auto; max-width: 95%; z-index: 1;
+      filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); cursor: pointer; pointer-events: auto;
+    }
+
+    /* 右側のメインメニュー */
+    .right-mode-menu {
+      position: absolute; right: 20px; bottom: 120px;
+      display: flex; flex-direction: column; gap: 20px; z-index: 20;
+    }
+    .mode-rect-btn {
+      width: 140px; height: 80px; border-radius: 15px; border: 3px solid #ECDBBF;
+      color: #fff; font-weight: bold; font-size: 1.5rem; cursor: pointer;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.5); text-shadow: 2px 2px 4px #432517;
+      animation: float-btn 3s infinite ease-in-out; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .mode-rect-btn:active { transform: scale(0.95); }
+    .offline-color { background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%); animation-delay: 0.5s; }
+    .online-color { background: linear-gradient(to bottom, #ff9800 0%, #f57c00 100%); animation-delay: 0s; }
+    
+    @keyframes float-btn { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+    /* 下部メニュー */
+    .bottom-menu {
+      position: absolute; bottom: 15px; width: 96%; left: 2%;
+      display: flex; justify-content: space-around; gap: 10px; z-index: 10;
+    }
+    .menu-btn {
+      flex: 1; height: 60px; background: rgba(67, 37, 23, 0.9); border: 2px solid #ECDBBF;
+      border-radius: 10px; color: #ECDBBF; font-weight: bold; font-size: 1.2rem;
+      cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.4); text-shadow: 1px 1px 2px #000;
+    }
+    .menu-btn:active { transform: scale(0.95); background: rgba(67, 37, 23, 1); }
+
+  </style>
+</head>
+<body>
+
+  <div id="loading-screen">
+    <div class="loader-content">
+      <div class="spinner"></div>
+      <div id="loading-tips"></div>
+      <p style="font-size: 0.8rem; margin-top: 10px; opacity: 0.8;">雀卓を準備中...</p>
+    </div>
+  </div>
+
+  <div id="bg-image"></div>
+
+  <div class="user-info-bar">
+    <div>
+      <span id="userNameDisplay" class="user-name">ゲスト</span> さん
+      <span style="margin-left: 15px; font-weight: bold; color: #ffd700; text-shadow: 1px 1px 2px #432517;">
+        💰 <span id="userGoldDisplay">1000</span> G
+      </span>
+    </div>
+  </div>
+
+  <img class="character-stand" src="image/character/komiya_touka.png" alt="パートナー">
+
+  <div class="right-mode-menu">
+    <button class="mode-rect-btn online-color" onclick="alert('オンライン対戦は現在開発中です！')">
+      <span>通信対局</span>
+      <span style="font-size: 0.8rem; font-weight: normal;">(開発中)</span>
+    </button>
+    <button class="mode-rect-btn offline-color" onclick="goToLobby()">
+      <span>ひとりで</span>
+      <span style="font-size: 0.8rem; font-weight: normal;">CPUと対戦</span>
+    </button>
+  </div>
+
+  <div class="bottom-menu">
+    <button class="menu-btn" onclick="alert('ショップ機能は準備中です')">ショップ</button>
+    <button class="menu-btn" onclick="alert('キャラクター設定は準備中です')">キャラ</button>
+    <button class="menu-btn" onclick="alert('設定メニューは準備中です')">設定</button>
+  </div>
+
+  <script>
+    // --- ロード画面とTipsの処理 ---
+    const loadingTipsList = [
+      "【tips】キャラクターにはそれぞれ独自の「AI性格」があります。",
+      "【tips】麻雀でも必殺技（イカサマ）を使えるように現在開発中です。",
+      "【tips】CPUの「キャラA」は、絶対に鳴かずにリーチを狙う強敵です。",
+      "【tips】ロビー画面で対戦相手のAIを自由に設定できます。"
+    ];
+
+    function showRandomTips() {
+      const tipEl = document.getElementById('loading-tips');
+      if (!tipEl) return;
+      tipEl.textContent = loadingTipsList[Math.floor(Math.random() * loadingTipsList.length)];
+    }
+
+    let tipsInterval = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      showRandomTips();
+      tipsInterval = setInterval(showRandomTips, 3000);
+    });
+
+    window.addEventListener('load', () => {
+      const loader = document.getElementById('loading-screen');
+      document.fonts.ready.then(() => {
+        setTimeout(() => {
+          clearInterval(tipsInterval);
+          loader.style.opacity = '0';
+          setTimeout(() => { loader.style.display = 'none'; }, 500);
+        }, 800); 
+      });
+    });
+
+    // --- 画面遷移 ---
+    function goToLobby() {
+        // 対局ロビー（index.html）へ移動
+        window.location.href = 'index.html';
+    }
+  </script>
+</body>
+</html>
