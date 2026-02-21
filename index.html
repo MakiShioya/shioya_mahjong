@@ -31,15 +31,13 @@
             height: 40vh; filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); z-index: 1; pointer-events: none;
         }
 
-        /* 4人分の点数表示パネル（河の近くに配置） */
         .score-panel {
             position: absolute; background: rgba(0,0,0,0.6); border: 2px solid #ECDBBF;
             padding: 5px 10px; border-radius: 5px; font-weight: bold; text-align: center;
             z-index: 6; font-size: 1.1rem;
         }
-        .score-panel.oya { border-color: #ff9800; color: #ff9800; } /* 親はオレンジ枠 */
+        .score-panel.oya { border-color: #ff9800; color: #ff9800; } 
         
-        /* 十字の河とスコアの位置合わせ用コンテナ */
         .rivers-container {
             position: relative; width: 550px; height: 550px;
             display: grid; grid-template-columns: 170px 210px 170px; grid-template-rows: 170px 210px 170px;
@@ -89,6 +87,13 @@
         .btn-action:active { transform: scale(0.9); }
         .btn-skip { background: linear-gradient(to bottom, #9e9e9e, #757575); }
 
+        /* ★追加：デバッグ用 CPU手牌表示エリア（元の配置を崩さないよう絶対配置） */
+        .cpu-hand-area { position: absolute; display: flex; gap: 1px; z-index: 5; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; pointer-events: none; border: 1px dashed #ECDBBF; }
+        .top-hand { top: 10px; left: 50%; transform: translateX(-50%); }
+        .left-hand { left: 10px; top: 50%; transform: translateY(-50%); flex-direction: column; }
+        .right-hand { right: 10px; top: 50%; transform: translateY(-50%); flex-direction: column; }
+        .cpu-pai-debug { width: 20px; height: 28px; border-radius: 2px; }
+
     </style>
 </head>
 <body>
@@ -101,6 +106,10 @@
         <img class="character-stand" src="image/character/komiya_touka.png" alt="こみや">
         <div id="turnIndicator">あなた の番</div>
         <div id="shantenIndicator">計算中...</div>
+
+        <div id="cpuHand-2" class="cpu-hand-area top-hand"></div>
+        <div id="cpuHand-3" class="cpu-hand-area left-hand"></div>
+        <div id="cpuHand-1" class="cpu-hand-area right-hand"></div>
 
         <div id="actionBox">
             <button id="btn-tsumo" class="btn-action" style="background: linear-gradient(to bottom, #e91e63, #c2185b); display: none;" onclick="executeAgari('tsumo')">ツモ</button>
@@ -139,19 +148,8 @@
     <script type="module">
         import Majiang from '@kobalab/majiang-core';
 
-        // ==========================================
-        // ▼▼▼ ゲーム全体を管理する変数 ▼▼▼
-        // ==========================================
-        let gameState = {
-            kyoku: 1,      // 1:東1局, 2:東2局, 3:東3局, 4:東4局
-            honba: 0,      // 本場
-            kyotaku: 0,    // 供託
-            currentOya: 0, // 現在の親
-            startingOya: 0 // 東1局の最初の親
-        };
-
-        let mountain = []; 
-        let currentTurn = 0; 
+        let gameState = { kyoku: 1, honba: 0, kyotaku: 0, currentOya: 0, startingOya: 0 };
+        let mountain = []; let currentTurn = 0; 
         
         let players = [
             { id: 0, name: "あなた", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false },
@@ -160,9 +158,7 @@
             { id: 3, name: "CPU(左)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false }
         ];
 
-        let isRiichiMode = false;
-        let validRiichiDiscards = [];
-        let pendingNaki = null;
+        let isRiichiMode = false; let validRiichiDiscards = []; let pendingNaki = null;
         let nextKyokuState = { oyaRenchan: false };
 
         function getPaiImagePath(suit, num, playerIndex) {
@@ -230,17 +226,14 @@
         window.startGame = function() {
             gameState.currentOya = Math.floor(Math.random() * 4);
             gameState.startingOya = gameState.currentOya;
-            gameState.kyoku = 1;
-            gameState.honba = 0;
-            gameState.kyotaku = 0;
+            gameState.kyoku = 1; gameState.honba = 0; gameState.kyotaku = 0;
             players.forEach(p => p.score = 25000);
             startKyoku();
         };
 
         function startKyoku() {
             mountain = shuffleDeck(createDeck());
-            isRiichiMode = false;
-            pendingNaki = null;
+            isRiichiMode = false; pendingNaki = null;
 
             players.forEach(p => {
                 p.hand = []; p.river = []; p.fulou = [];
@@ -255,21 +248,16 @@
             currentTurn = gameState.currentOya;
             players[currentTurn].tsumo = mountain.pop();
             
-            renderAll();
-            updateScoresUI();
+            renderAll(); updateScoresUI();
 
-            if (currentTurn !== 0) {
-                setTimeout(() => { executeCPUTurn(currentTurn); }, 800);
-            }
+            if (currentTurn !== 0) setTimeout(() => { executeCPUTurn(currentTurn); }, 800);
         }
 
-        // --- 全員対応型のアガリ処理 ---
         window.executeAgari = function(type, winnerIndex = 0, cpuHule = null) {
             document.getElementById('actionBox').style.display = 'none';
             let my = players[winnerIndex];
             
-            let hule = cpuHule;
-            let discarderIndex = -1;
+            let hule = cpuHule; let discarderIndex = -1;
 
             if (!hule) {
                 let handStr = getMajiangString(my.hand, type === 'tsumo' ? my.tsumo : null, my.fulou);
@@ -278,7 +266,7 @@
                 if (type === 'ron') {
                     let relMap = { 1: '-', 2: '=', 3: '+' };
                     discarderIndex = pendingNaki.discarderIndex;
-                    let rel = (4 + discarderIndex - winnerIndex) % 4; // 相対位置の計算
+                    let rel = (4 + discarderIndex - winnerIndex) % 4; 
                     rongpai = pendingNaki.discardedPai.suit + pendingNaki.discardedPai.num + relMap[rel];
                 }
                 let menfeng = (winnerIndex - gameState.currentOya + 4) % 4;
@@ -293,16 +281,15 @@
 
             if (!hule || !hule.hupai) { alert("エラー：役がありません！"); return; }
 
-            let honbaPoints = gameState.honba * 300;
-            let kyotakuPoints = gameState.kyotaku * 1000;
+            let honbaPoints = gameState.honba * 300; let kyotakuPoints = gameState.kyotaku * 1000;
             let menfeng = (winnerIndex - gameState.currentOya + 4) % 4;
             
             if (type === 'tsumo') {
-                if (menfeng === 0) { // 親のツモ
+                if (menfeng === 0) { 
                     let pay = Math.ceil((hule.defen / 3) / 100) * 100;
                     players.forEach((p, i) => { if (i !== winnerIndex) p.score -= (pay + honbaPoints / 3); });
                     my.score += (pay * 3 + honbaPoints);
-                } else { // 子のツモ
+                } else { 
                     let payOya = Math.ceil((hule.defen / 2) / 100) * 100;
                     let payKo = Math.ceil((hule.defen / 4) / 100) * 100;
                     players.forEach((p, i) => {
@@ -312,16 +299,13 @@
                     });
                     my.score += (payOya + payKo * 2 + honbaPoints);
                 }
-            } else { // ロン
+            } else { 
                 players[discarderIndex].score -= (hule.defen + honbaPoints);
                 my.score += (hule.defen + honbaPoints);
             }
             
-            my.score += kyotakuPoints;
-            gameState.kyotaku = 0;
-            nextKyokuState.oyaRenchan = (menfeng === 0);
+            my.score += kyotakuPoints; gameState.kyotaku = 0; nextKyokuState.oyaRenchan = (menfeng === 0);
 
-            // リザルト表示
             let winnerName = winnerIndex === 0 ? "あなた" : players[winnerIndex].name;
             let title = type === 'tsumo' ? `🎉 ${winnerName} のツモ！` : `💥 ${winnerName} のロン！`;
             let yakuText = hule.hupai.map(h => `${h.name} ${h.fanshu}翻`).join('<br>');
@@ -340,18 +324,13 @@
             let tenpaiPlayers = [];
             players.forEach((p, index) => {
                 let handStr = getMajiangString(p.hand, p.tsumo, p.fulou);
-                let shoupai = Majiang.Shoupai.fromString(handStr);
-                if (Majiang.Util.xiangting(shoupai) === 0) tenpaiPlayers.push(index);
+                if (Majiang.Util.xiangting(Majiang.Shoupai.fromString(handStr)) === 0) tenpaiPlayers.push(index);
             });
 
             let tenpaiCount = tenpaiPlayers.length;
             if (tenpaiCount > 0 && tenpaiCount < 4) {
-                let receive = 3000 / tenpaiCount;
-                let pay = 3000 / (4 - tenpaiCount);
-                players.forEach((p, i) => {
-                    if (tenpaiPlayers.includes(i)) p.score += receive;
-                    else p.score -= pay;
-                });
+                let receive = 3000 / tenpaiCount; let pay = 3000 / (4 - tenpaiCount);
+                players.forEach((p, i) => { if (tenpaiPlayers.includes(i)) p.score += receive; else p.score -= pay; });
             }
 
             nextKyokuState.oyaRenchan = tenpaiPlayers.includes(gameState.currentOya);
@@ -367,19 +346,10 @@
         }
 
         window.prepareNextKyoku = function() {
-            document.getElementById('resultModal').style.display = 'none';
-            document.getElementById('resultTitle').style.color = "#e91e63";
-
-            if (nextKyokuState.oyaRenchan) {
-                gameState.honba++;
-            } else {
-                gameState.currentOya = (gameState.currentOya + 1) % 4;
-                gameState.kyoku++;
-                gameState.honba = 0;
-            }
-
-            if (gameState.kyoku > 4) showFinalRanking();
-            else startKyoku();
+            document.getElementById('resultModal').style.display = 'none'; document.getElementById('resultTitle').style.color = "#e91e63";
+            if (nextKyokuState.oyaRenchan) gameState.honba++;
+            else { gameState.currentOya = (gameState.currentOya + 1) % 4; gameState.kyoku++; gameState.honba = 0; }
+            if (gameState.kyoku > 4) showFinalRanking(); else startKyoku();
         };
 
         function showFinalRanking() {
@@ -400,8 +370,7 @@
             players.forEach(p => {
                 let panel = document.getElementById(`score-${p.id}`);
                 panel.innerHTML = `${p.name}<br>${p.score}`;
-                if (p.id === gameState.currentOya) panel.classList.add('oya');
-                else panel.classList.remove('oya');
+                if (p.id === gameState.currentOya) panel.classList.add('oya'); else panel.classList.remove('oya');
             });
         }
 
@@ -410,57 +379,42 @@
             let handStr = getMajiangString(my.hand, my.tsumo, my.fulou);
             
             try {
-                let shoupai = Majiang.Shoupai.fromString(handStr);
-                let shanten = Majiang.Util.xiangting(shoupai);
-                let text = ""; let indicator = document.getElementById('shantenIndicator');
-                let canTsumo = false;
+                let shoupai = Majiang.Shoupai.fromString(handStr); let shanten = Majiang.Util.xiangting(shoupai);
+                let text = ""; let indicator = document.getElementById('shantenIndicator'); let canTsumo = false;
                 
-                document.getElementById('actionBox').style.display = 'none';
-                document.getElementById('btn-tsumo').style.display = 'none';
-                document.getElementById('btn-riichi').style.display = 'none';
-                document.getElementById('btn-ron').style.display = 'none';
-                document.getElementById('btn-pon').style.display = 'none';
-                document.getElementById('btn-chii').style.display = 'none';
-                document.getElementById('btn-kan').style.display = 'none';
-                document.getElementById('btn-skip').style.display = 'none';
+                document.getElementById('actionBox').style.display = 'none'; document.getElementById('btn-tsumo').style.display = 'none';
+                document.getElementById('btn-riichi').style.display = 'none'; document.getElementById('btn-ron').style.display = 'none';
+                document.getElementById('btn-pon').style.display = 'none'; document.getElementById('btn-chii').style.display = 'none';
+                document.getElementById('btn-kan').style.display = 'none'; document.getElementById('btn-skip').style.display = 'none';
 
                 if (shanten === -1) {
                     let menfeng = (0 - gameState.currentOya + 4) % 4;
                     let param = { rule: Majiang.rule(), zhuangfeng: 0, menfeng: menfeng, hupai: { lizhi: my.isRiichi ? 1 : 0 }, baopai: ['m1'], fubaopai: [], jicun: { changbang: 0, lizhibang: 0 } };
                     let hule = Majiang.Util.hule(shoupai, null, param);
-
                     if (hule) {
                         text = "🎉 ツモ！（アガリ）"; indicator.style.color = "#ffeb3b"; indicator.style.borderColor = "#ffeb3b"; canTsumo = true;
                         if (my.tsumo) { document.getElementById('btn-tsumo').style.display = 'block'; document.getElementById('actionBox').style.display = 'flex'; }
                     } else {
                         text = "役なし（アガれません）"; indicator.style.color = "#9e9e9e"; indicator.style.borderColor = "#9e9e9e";
                     }
-                } else if (shanten === 0) {
-                    text = "🔥 テンパイ！"; indicator.style.color = "#ff9800"; indicator.style.borderColor = "#ff9800";
-                } else {
-                    text = `${shanten} シャンテン`; indicator.style.color = "#ECDBBF"; indicator.style.borderColor = "#ECDBBF";
-                }
+                } else if (shanten === 0) { text = "🔥 テンパイ！"; indicator.style.color = "#ff9800"; indicator.style.borderColor = "#ff9800"; } 
+                else { text = `${shanten} シャンテン`; indicator.style.color = "#ECDBBF"; indicator.style.borderColor = "#ECDBBF"; }
                 indicator.textContent = text;
 
                 if (my.isRiichi) {
                     if (!canTsumo && my.tsumo) setTimeout(() => { discardPai(0, my.tsumo, true); }, 600); 
                 } else if (my.fulou.length === 0 && my.tsumo && my.score >= 1000) {
                     validRiichiDiscards = [];
-                    let allTiles = [...my.hand, my.tsumo];
-                    let seen = new Set();
+                    let allTiles = [...my.hand, my.tsumo]; let seen = new Set();
                     for (let tile of allTiles) {
                         let key = tile.suit + tile.num;
                         if (!seen.has(key)) {
                             seen.add(key);
                             let simHand = allTiles.filter(t => t.id !== tile.id); 
-                            let simStr = getMajiangString(simHand, null, []);
-                            let simShoupai = Majiang.Shoupai.fromString(simStr);
-                            if (Majiang.Util.xiangting(simShoupai) === 0) validRiichiDiscards.push(tile);
+                            if (Majiang.Util.xiangting(Majiang.Shoupai.fromString(getMajiangString(simHand, null, []))) === 0) validRiichiDiscards.push(tile);
                         }
                     }
-                    if (validRiichiDiscards.length > 0 && !canTsumo) {
-                        document.getElementById('btn-riichi').style.display = 'block'; document.getElementById('actionBox').style.display = 'flex';
-                    }
+                    if (validRiichiDiscards.length > 0 && !canTsumo) { document.getElementById('btn-riichi').style.display = 'block'; document.getElementById('actionBox').style.display = 'flex'; }
                 }
             } catch (e) { console.error(e); }
         }
@@ -475,11 +429,8 @@
             let handStr = getMajiangString(my.hand, null, my.fulou);
             let shoupai = Majiang.Shoupai.fromString(handStr);
 
-            let relMap = { 1: '-', 2: '=', 3: '+' };
-            let pStr = discardedPai.suit + discardedPai.num + relMap[discarderIndex];
-
-            let canRon = false;
-            let tingpai = Majiang.Util.tingpai(shoupai) || [];
+            let relMap = { 1: '-', 2: '=', 3: '+' }; let pStr = discardedPai.suit + discardedPai.num + relMap[discarderIndex];
+            let canRon = false; let tingpai = Majiang.Util.tingpai(shoupai) || [];
             if (tingpai.includes(discardedPai.suit + discardedPai.num.toString())) {
                 let menfeng = (0 - gameState.currentOya + 4) % 4;
                 let param = { rule: Majiang.rule(), zhuangfeng: 0, menfeng: menfeng, hupai: { lizhi: my.isRiichi ? 1 : 0 }, baopai: ['m1'], fubaopai: [], jicun: { changbang: 0, lizhibang: 0 } };
@@ -493,76 +444,57 @@
 
             if (canRon || chiList.length > 0 || ponList.length > 0 || kanList.length > 0) {
                 pendingNaki = { discarderIndex, discardedPai, chiList, ponList, kanList, canRon };
-                document.getElementById('btn-tsumo').style.display = 'none';
-                document.getElementById('btn-riichi').style.display = 'none';
+                document.getElementById('btn-tsumo').style.display = 'none'; document.getElementById('btn-riichi').style.display = 'none';
                 document.getElementById('btn-ron').style.display = canRon ? 'block' : 'none';
                 document.getElementById('btn-pon').style.display = ponList.length > 0 ? 'block' : 'none';
                 document.getElementById('btn-chii').style.display = chiList.length > 0 ? 'block' : 'none';
                 document.getElementById('btn-kan').style.display = kanList.length > 0 ? 'block' : 'none';
-                document.getElementById('btn-skip').style.display = 'block'; 
-                document.getElementById('actionBox').style.display = 'flex';
+                document.getElementById('btn-skip').style.display = 'block'; document.getElementById('actionBox').style.display = 'flex';
                 return true; 
             }
             return false; 
         }
 
-        // --- ★追加：CPUのアクション（ロン・鳴き）を評価するAI ---
         function checkCPUActions(discarderIndex, discardedPai) {
-            // 1. CPUのロンをチェック
             for (let i = 1; i < 4; i++) {
                 if (i === discarderIndex) continue;
-                let cp = players[i];
-                let shoupai = Majiang.Shoupai.fromString(getMajiangString(cp.hand, null, cp.fulou));
+                let cp = players[i]; let shoupai = Majiang.Shoupai.fromString(getMajiangString(cp.hand, null, cp.fulou));
                 let tingpai = Majiang.Util.tingpai(shoupai) || [];
                 
                 if (tingpai.includes(discardedPai.suit + discardedPai.num.toString())) {
-                    let relMap = { 1: '-', 2: '=', 3: '+' };
-                    let pStr = discardedPai.suit + discardedPai.num + relMap[(4 + discarderIndex - i) % 4];
+                    let relMap = { 1: '-', 2: '=', 3: '+' }; let pStr = discardedPai.suit + discardedPai.num + relMap[(4 + discarderIndex - i) % 4];
                     let param = { rule: Majiang.rule(), zhuangfeng: 0, menfeng: (i - gameState.currentOya + 4)%4, hupai: { lizhi: cp.isRiichi ? 1 : 0 }, baopai: ['m1'], fubaopai: [], jicun: { changbang: 0, lizhibang: 0 } };
                     let hule = Majiang.Util.hule(shoupai, pStr, param);
                     
                     if (hule) {
                         pendingNaki = { discarderIndex: discarderIndex, discardedPai: discardedPai };
-                        setTimeout(() => executeAgari('ron', i, hule), 400);
-                        return true;
+                        setTimeout(() => executeAgari('ron', i, hule), 400); return true;
                     }
                 }
             }
 
-            // 2. CPUの「鳴き」をチェック（シャンテン数が減る時だけ鳴く！）
             for (let i = 1; i < 4; i++) {
                 if (i === discarderIndex) continue;
-                let cp = players[i];
-                if (cp.isRiichi) continue;
-                
-                let handStr = getMajiangString(cp.hand, null, cp.fulou);
-                let shoupai = Majiang.Shoupai.fromString(handStr);
+                let cp = players[i]; if (cp.isRiichi) continue;
+                let handStr = getMajiangString(cp.hand, null, cp.fulou); let shoupai = Majiang.Shoupai.fromString(handStr);
                 let currentShanten = Majiang.Util.xiangting(shoupai);
                 
-                let relMap = { 1: '-', 2: '=', 3: '+' };
-                let rel = (4 + discarderIndex - i) % 4; // 上家(3), 対面(2), 下家(1)
+                let relMap = { 1: '-', 2: '=', 3: '+' }; let rel = (4 + discarderIndex - i) % 4;
                 let pStr = discardedPai.suit + discardedPai.num + relMap[rel];
                 
-                let ponList = shoupai.get_peng_mianzi(pStr) || [];
-                let chiList = rel === 3 ? (shoupai.get_chi_mianzi(pStr) || []) : [];
-                
+                let ponList = shoupai.get_peng_mianzi(pStr) || []; let chiList = rel === 3 ? (shoupai.get_chi_mianzi(pStr) || []) : [];
                 let bestNaki = null; let bestNakiType = '';
                 
                 if (ponList.length > 0) {
-                    let testShoupai = Majiang.Shoupai.fromString(handStr);
-                    testShoupai.fulou(ponList[0]);
+                    let testShoupai = Majiang.Shoupai.fromString(handStr); testShoupai.fulou(ponList[0]);
                     if (Majiang.Util.xiangting(testShoupai) < currentShanten) { bestNaki = ponList[0]; bestNakiType = 'pon'; }
                 }
                 if (!bestNaki && chiList.length > 0) {
-                    let testShoupai = Majiang.Shoupai.fromString(handStr);
-                    testShoupai.fulou(chiList[0]);
+                    let testShoupai = Majiang.Shoupai.fromString(handStr); testShoupai.fulou(chiList[0]);
                     if (Majiang.Util.xiangting(testShoupai) < currentShanten) { bestNaki = chiList[0]; bestNakiType = 'chii'; }
                 }
 
-                if (bestNaki) {
-                    setTimeout(() => executeCPUNaki(i, discarderIndex, discardedPai, bestNakiType, bestNaki), 400);
-                    return true;
-                }
+                if (bestNaki) { setTimeout(() => executeCPUNaki(i, discarderIndex, discardedPai, bestNakiType, bestNaki), 400); return true; }
             }
             return false;
         }
@@ -571,51 +503,31 @@
             document.getElementById('actionBox').style.display = 'none';
             if (type === 'skip') { 
                 let pNaki = pendingNaki; pendingNaki = null; 
-                // 人間がスルーした場合、CPUに鳴きのチャンスを渡す
                 if (checkCPUActions(pNaki.discarderIndex, pNaki.discardedPai)) return;
                 nextTurn(); return; 
             }
 
-            let { discarderIndex, discardedPai, chiList, ponList, kanList } = pendingNaki;
-            let my = players[0];
-            players[discarderIndex].river.pop();
-            let removedTiles = [];
+            let { discarderIndex, discardedPai, chiList, ponList, kanList } = pendingNaki; let my = players[0];
+            players[discarderIndex].river.pop(); let removedTiles = [];
             
             if (type === 'pon') {
-                for(let i=0; i<2; i++) {
-                    let idx = my.hand.findIndex(p => p.suit === discardedPai.suit && p.num === discardedPai.num);
-                    removedTiles.push(my.hand.splice(idx, 1)[0]);
-                }
+                for(let i=0; i<2; i++) { let idx = my.hand.findIndex(p => p.suit === discardedPai.suit && p.num === discardedPai.num); removedTiles.push(my.hand.splice(idx, 1)[0]); }
             } else if (type === 'chii') {
-                let mStr = chiList[0]; 
-                let nums = mStr.match(/\d/g).map(Number);
-                let neededNums = nums.filter(n => n !== discardedPai.num);
-                for(let n of neededNums) {
-                    let idx = my.hand.findIndex(p => p.suit === discardedPai.suit && p.num === n);
-                    removedTiles.push(my.hand.splice(idx, 1)[0]);
-                }
+                let nums = chiList[0].match(/\d/g).map(Number); let neededNums = nums.filter(n => n !== discardedPai.num);
+                for(let n of neededNums) { let idx = my.hand.findIndex(p => p.suit === discardedPai.suit && p.num === n); removedTiles.push(my.hand.splice(idx, 1)[0]); }
             } else if (type === 'kan') {
-                for(let i=0; i<3; i++) {
-                    let idx = my.hand.findIndex(p => p.suit === discardedPai.suit && p.num === discardedPai.num);
-                    removedTiles.push(my.hand.splice(idx, 1)[0]);
-                }
+                for(let i=0; i<3; i++) { let idx = my.hand.findIndex(p => p.suit === discardedPai.suit && p.num === discardedPai.num); removedTiles.push(my.hand.splice(idx, 1)[0]); }
             }
             my.fulou.push({ type: type, tiles: [...removedTiles, discardedPai] });
-            currentTurn = 0; my.tsumo = null; pendingNaki = null;
-            renderAll(); 
+            currentTurn = 0; my.tsumo = null; pendingNaki = null; renderAll(); 
         };
 
-        // --- ★追加：CPU専用の鳴き処理と、鳴いた直後の自動打牌 ---
         function executeCPUNaki(cpuIndex, discarderIndex, discardedPai, type, mStr) {
-            let cp = players[cpuIndex];
-            players[discarderIndex].river.pop();
-            let removedTiles = [];
-            
+            let cp = players[cpuIndex]; players[discarderIndex].river.pop(); let removedTiles = [];
             if (type === 'pon') {
                 for(let i=0; i<2; i++) { let idx = cp.hand.findIndex(p => p.suit === discardedPai.suit && p.num === discardedPai.num); removedTiles.push(cp.hand.splice(idx, 1)[0]); }
             } else if (type === 'chii') {
-                let nums = mStr.match(/\d/g).map(Number);
-                let neededNums = nums.filter(n => n !== discardedPai.num);
+                let nums = mStr.match(/\d/g).map(Number); let neededNums = nums.filter(n => n !== discardedPai.num);
                 for(let n of neededNums) { let idx = cp.hand.findIndex(p => p.suit === discardedPai.suit && p.num === n); removedTiles.push(cp.hand.splice(idx, 1)[0]); }
             }
             cp.fulou.push({ type: type, tiles: [...removedTiles, discardedPai] });
@@ -639,26 +551,16 @@
             if (playerIndex === 0 && isRiichiMode) {
                 let isValid = validRiichiDiscards.some(t => t.suit === discardedPai.suit && t.num === discardedPai.num);
                 if (!isValid) { alert("その牌を切ってリーチはできません"); return; }
-                
                 p.isRiichi = true; p.score -= 1000; gameState.kyotaku++;
                 isRiichiMode = false; discardedPai.isRiichiDeclare = true; updateScoresUI();
             }
 
             p.river.push(discardedPai);
             if (isTsumo) p.tsumo = null;
-            else {
-                p.hand = p.hand.filter(pai => pai.id !== discardedPai.id);
-                if (p.tsumo) p.hand.push(p.tsumo); p.tsumo = null;
-            }
-            p.hand = sortHand(p.hand);
-            renderAll(); 
+            else { p.hand = p.hand.filter(pai => pai.id !== discardedPai.id); if (p.tsumo) p.hand.push(p.tsumo); p.tsumo = null; }
+            p.hand = sortHand(p.hand); renderAll(); 
 
-            // 1. 人間のロン・鳴きチェック（優先）
-            if (playerIndex !== 0) {
-                if (checkNakiAvailable(playerIndex, discardedPai)) return; 
-            }
-
-            // 2. ★追加：CPUのロン・鳴きチェック
+            if (playerIndex !== 0) { if (checkNakiAvailable(playerIndex, discardedPai)) return; }
             if (checkCPUActions(playerIndex, discardedPai)) return;
 
             nextTurn();
@@ -669,33 +571,30 @@
             currentTurn = (currentTurn + 1) % 4;
             players[currentTurn].tsumo = mountain.pop();
             renderAll();
-
             if (currentTurn !== 0) setTimeout(() => { executeCPUTurn(currentTurn); }, 400); 
         }
 
-        // --- ★追加：CPUのメインAI（ツモ・リーチ・最適な捨て牌） ---
+        // --- ★追加：牌の価値を計算して、CPUに「人間らしい選択」をさせる ---
+        function getTileValue(tile) {
+            if (tile.suit === 'z') return 1; // 字牌は一番価値が低い（真っ先に捨てる）
+            if (tile.num === 1 || tile.num === 9) return 2; // 端牌
+            if (tile.num === 2 || tile.num === 8) return 3; 
+            return 4; // 3~7の牌は大事にする
+        }
+
         function executeCPUTurn(cpuIndex) {
             let p = players[cpuIndex];
             let handStr = getMajiangString(p.hand, p.tsumo, p.fulou);
             let shoupai = Majiang.Shoupai.fromString(handStr);
             
-            // 1. ツモアガリができるかチェック
             if (Majiang.Util.xiangting(shoupai) === -1) {
                 let param = { rule: Majiang.rule(), zhuangfeng: 0, menfeng: (cpuIndex - gameState.currentOya + 4)%4, hupai: { lizhi: p.isRiichi ? 1 : 0 }, baopai: ['m1'], fubaopai: [], jicun: { changbang: 0, lizhibang: 0 } };
                 let hule = Majiang.Util.hule(shoupai, null, param);
-                if (hule) { 
-                    setTimeout(() => executeAgari('tsumo', cpuIndex, hule), 400); 
-                    return; 
-                }
+                if (hule) { setTimeout(() => executeAgari('tsumo', cpuIndex, hule), 400); return; }
             }
 
-            // リーチしている場合は強制ツモ切り
-            if (p.isRiichi) { 
-                discardPai(cpuIndex, p.tsumo, true); 
-                return; 
-            }
+            if (p.isRiichi) { discardPai(cpuIndex, p.tsumo, true); return; }
 
-            // 2. シャンテン数が一番減る（アガリに近い）牌をシミュレーションして探す
             let allTiles = [...p.hand, p.tsumo];
             let minShanten = 99; let bestTiles = []; let seen = new Set();
 
@@ -710,11 +609,14 @@
                 }
             }
             
-            // アガリに最も近い牌の候補からランダムに選ぶ
-            let chosenPai = bestTiles[Math.floor(Math.random() * bestTiles.length)];
+            // ★改良：同じシャンテン数なら、一番「価値の低い牌（字牌など）」を選ぶ
+            bestTiles.sort((a, b) => getTileValue(a) - getTileValue(b));
+            let lowestValue = getTileValue(bestTiles[0]);
+            let candidates = bestTiles.filter(t => getTileValue(t) === lowestValue);
+            
+            let chosenPai = candidates[Math.floor(Math.random() * candidates.length)];
             let isTsumo = (chosenPai.id === p.tsumo.id);
 
-            // 3. もしテンパイ（シャンテン数0）なら即リーチをかける
             if (minShanten === 0 && p.fulou.length === 0 && p.score >= 1000) {
                 p.isRiichi = true; p.score -= 1000; gameState.kyotaku++;
                 chosenPai.isRiichiDeclare = true; updateScoresUI();
@@ -729,36 +631,25 @@
             const handArea = document.getElementById('myHandArea');
             handArea.innerHTML = ''; 
             
-            if (currentTurn === 0) handArea.classList.add('my-turn');
-            else handArea.classList.remove('my-turn');
+            if (currentTurn === 0) handArea.classList.add('my-turn'); else handArea.classList.remove('my-turn');
 
             let my = players[0];
             
             my.hand.forEach(pai => {
-                const img = document.createElement('img');
-                img.src = getPaiImagePath(pai.suit, pai.num, 0);
-                img.className = 'pai-img';
-                img.onclick = () => { if (currentTurn === 0 && !my.isRiichi) discardPai(0, pai, false); };
-                handArea.appendChild(img);
+                const img = document.createElement('img'); img.src = getPaiImagePath(pai.suit, pai.num, 0); img.className = 'pai-img';
+                img.onclick = () => { if (currentTurn === 0 && !my.isRiichi) discardPai(0, pai, false); }; handArea.appendChild(img);
             });
 
             if (my.tsumo) {
-                const tsumoImg = document.createElement('img');
-                tsumoImg.src = getPaiImagePath(my.tsumo.suit, my.tsumo.num, 0);
-                tsumoImg.className = 'pai-img tsumo-pai';
-                tsumoImg.onclick = () => { if (currentTurn === 0 && !my.isRiichi) discardPai(0, my.tsumo, true); };
-                handArea.appendChild(tsumoImg);
+                const tsumoImg = document.createElement('img'); tsumoImg.src = getPaiImagePath(my.tsumo.suit, my.tsumo.num, 0); tsumoImg.className = 'pai-img tsumo-pai';
+                tsumoImg.onclick = () => { if (currentTurn === 0 && !my.isRiichi) discardPai(0, my.tsumo, true); }; handArea.appendChild(tsumoImg);
             }
 
             if (my.fulou.length > 0) {
-                const fulouGroup = document.createElement('div');
-                fulouGroup.className = 'fulou-group';
+                const fulouGroup = document.createElement('div'); fulouGroup.className = 'fulou-group';
                 my.fulou.forEach(f => {
                     f.tiles.forEach(pai => {
-                        const img = document.createElement('img');
-                        img.src = getPaiImagePath(pai.suit, pai.num, 0);
-                        img.className = 'pai-img'; img.style.marginRight = '2px';
-                        fulouGroup.appendChild(img);
+                        const img = document.createElement('img'); img.src = getPaiImagePath(pai.suit, pai.num, 0); img.className = 'pai-img'; img.style.marginRight = '2px'; fulouGroup.appendChild(img);
                     });
                     const space = document.createElement('div'); space.style.width = '10px'; fulouGroup.appendChild(space);
                 });
@@ -766,26 +657,42 @@
             }
 
             for (let i = 0; i < 4; i++) {
-                const riverArea = document.getElementById(`river-${i}`);
-                riverArea.innerHTML = '';
+                const riverArea = document.getElementById(`river-${i}`); riverArea.innerHTML = '';
                 players[i].river.forEach(pai => {
-                    const img = document.createElement('img');
-                    img.src = getPaiImagePath(pai.suit, pai.num, i);
-                    let isHorizontal = (i === 1 || i === 3);
-                    if (pai.isRiichiDeclare) isHorizontal = !isHorizontal; 
-                    img.className = isHorizontal ? 'river-pai-h' : 'river-pai-v';
-                    riverArea.appendChild(img);
+                    const img = document.createElement('img'); img.src = getPaiImagePath(pai.suit, pai.num, i);
+                    let isHorizontal = (i === 1 || i === 3); if (pai.isRiichiDeclare) isHorizontal = !isHorizontal; 
+                    img.className = isHorizontal ? 'river-pai-h' : 'river-pai-v'; riverArea.appendChild(img);
                 });
             }
 
+            // ★追加：デバッグ用にCPUの牌を画面上に並べて表示する
+            for (let i = 1; i < 4; i++) {
+                const cpuArea = document.getElementById(`cpuHand-${i}`);
+                if (cpuArea) {
+                    cpuArea.innerHTML = '';
+                    players[i].hand.forEach(pai => {
+                        const img = document.createElement('img');
+                        // 開発者が見やすいように、全部「正面向き」の画像を使う
+                        img.src = getPaiImagePath(pai.suit, pai.num, 0); 
+                        img.className = 'cpu-pai-debug';
+                        cpuArea.appendChild(img);
+                    });
+                    if (players[i].tsumo) {
+                        const img = document.createElement('img');
+                        img.src = getPaiImagePath(players[i].tsumo.suit, players[i].tsumo.num, 0);
+                        img.className = 'cpu-pai-debug';
+                        if (i === 1 || i === 3) img.style.marginTop = '6px';
+                        else img.style.marginLeft = '6px';
+                        cpuArea.appendChild(img);
+                    }
+                }
+            }
+
             document.getElementById('deckCount').textContent = `残り山札: ${mountain.length}枚`;
-            
             if (currentTurn === 0) checkMyHand();
         }
 
-        window.onload = function() {
-            startGame();
-        };
+        window.onload = function() { startGame(); };
     </script>
 </body>
 </html>
