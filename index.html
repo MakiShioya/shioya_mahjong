@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>しおや麻雀 - タイトル</title>
+  
+  <link rel="preload" href="font/setofont.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="icon" href="image/komiya_icon.png"> 
+  
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    @font-face {
+      font-family: 'SetoFont';
+      src: url('font/setofont.ttf') format('truetype');
+      font-display: block;
+    }
+
+    body {
+      margin: 0; padding: 0; height: 100vh; width: 100vw;
+      /* 背景を麻雀マット風の緑グラデーションに */
+      background-color: #1e5631;
+      background-image: radial-gradient(#2a7743 1px, transparent 1px);
+      background-size: 20px 20px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-family: sans-serif; overflow: hidden; user-select: none;
+      -webkit-touch-callout: none; -webkit-user-drag: none;
+    }
+
+    input, textarea { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+
+    /* ▼▼▼ スプラッシュスクリーン ▼▼▼ */
+    #splash-screen {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: #432517; z-index: 99999;
+      display: flex; justify-content: center; align-items: center;
+      pointer-events: auto; transition: opacity 0.5s ease; 
+    }
+    .splash-content {
+      color: #ECDBBF; font-family: "MS Mincho", serif;
+      text-align: center; opacity: 0; transition: opacity 0.5s ease;
+      position: absolute; width: 100%;
+    }
+    #splash-logo { font-size: 2.5rem; font-weight: bold; letter-spacing: 0.2em; }
+    #splash-warning { font-size: 1.2rem; line-height: 2; }
+    /* ▲▲▲ スプラッシュスクリーンここまで ▲▲▲ */
+
+    .title-logo {
+      font-size: 5rem; color: #ff9800;
+      text-shadow: 3px 3px 0px #ECDBBF, 5px 5px 10px rgba(0, 0, 0, 0.8);
+      font-weight: bold; margin-bottom: 20vh; text-align: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.8s ease;
+      font-family: 'SetoFont', sans-serif; /* 麻雀のタイトルは瀬戸フォントが似合います */
+    }
+
+    .tap-start {
+      font-size: 1.5rem; color: #ECDBBF; animation: blink 1.5s infinite;
+      cursor: pointer; text-shadow: 0 0 5px black; background: rgba(0,0,0,0.3);
+      padding: 10px 40px; border-radius: 30px; font-family: 'SetoFont', sans-serif;
+      opacity: 0; pointer-events: none; transition: opacity 0.8s ease;
+    }
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+    .settings-btn {
+      position: absolute; top: 20px; left: 20px; font-size: 1.1rem; font-weight: bold;
+      color: #ECDBBF; background: rgba(139, 69, 19, 0.8); border: 2px solid #FFB347;
+      border-radius: 8px; padding: 8px 16px; cursor: pointer; box-shadow: 0 4px 0 #5d2e0d;
+      z-index: 10; display: flex; align-items: center; gap: 5px; font-family: 'SetoFont', sans-serif;
+      opacity: 0; pointer-events: none; transition: opacity 0.8s ease;
+    }
+    .settings-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #5d2e0d; }
+    .settings-btn:hover { background: rgba(160, 82, 45, 0.9); border-color: #ffcc80; }
+    
+    .fade-in-done { opacity: 1 !important; pointer-events: auto !important; }
+    .tap-start.fade-in-done { animation: blink 1.5s infinite; }
+
+    #authModal, #authModal input, #authModal button, #authModal h2, #authModal label {
+      font-family: 'SetoFont', sans-serif;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="splash-screen">
+    <div id="splash-logo" class="splash-content">しおやソフト</div>
+    <div id="splash-warning" class="splash-content">
+        <span style="font-size: 3rem; color: #ffcc00;">⚠</span><br>
+        ★ 歩きながらの麻雀は<br>
+        　 役満放銃より危険です。<br><br>
+        ★ 画面は横持ちにしてください。
+    </div>
+  </div>
+
+  <button id="main-settings" class="settings-btn" onclick="showAuthModal()">アカウント</button>
+
+  <div id="main-title" class="title-logo">しおや麻雀</div>
+
+  <div id="main-start" class="tap-start" onclick="goToHome()">TAP TO START</div>
+
+  <div id="authModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; justify-content: center; align-items: center;">
+    <div style="background: #fff8dc; padding: 30px; border: 4px solid #8b4513; border-radius: 10px; text-align: center; width: 300px;">
+      <h2 id="authTitle" style="margin-top: 0; color: #8b4513;">ログイン / 新規登録</h2>
+      <div id="authInputs">
+        <div style="text-align: left; margin: 15px 0;">
+          <label>メールアドレス</label><br>
+          <input type="email" id="authEmail" placeholder="example@mail.com" style="width: 100%; padding: 8px; font-size: 16px; box-sizing: border-box;">
+        </div>
+        <div style="text-align: left; margin: 15px 0;">
+          <label>パスワード（6文字以上）</label><br>
+          <input type="password" id="authPass" placeholder="******" style="width: 100%; padding: 8px; font-size: 16px; box-sizing: border-box;">
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 20px;">
+          <button onclick="alert('準備中です')" style="background: #007bff; color: #ECDBBF; width: 45%; height: 40px; font-size: 16px; border:none; border-radius:5px; cursor:pointer;">ログイン</button>
+          <button onclick="alert('準備中です')" style="background: #28a745; color: #ECDBBF; width: 45%; height: 40px; font-size: 16px; border:none; border-radius:5px; cursor:pointer;">新規登録</button>
+        </div>
+      </div>
+      <button onclick="closeAuthModal()" style="margin-top: 20px; background: #ccc; border: none; color: black; width: 100px; height: 30px; font-size: 14px; cursor:pointer; border-radius: 5px;">閉じる</button>
+    </div>
+  </div>
+
+  <script>
+    // ▼▼▼ オープニング演出 ▼▼▼
+    document.addEventListener("DOMContentLoaded", async () => {
+        const splashScreen = document.getElementById('splash-screen');
+        const logo = document.getElementById('splash-logo');
+        const warning = document.getElementById('splash-warning');
+        const mainTitle = document.getElementById('main-title');
+        const mainStart = document.getElementById('main-start');
+        const mainSettings = document.getElementById('main-settings');
+
+        const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        await wait(200);
+        logo.style.opacity = '1';
+
+        await wait(1200); 
+        logo.style.opacity = '0';
+
+        await wait(500);
+        warning.style.opacity = '1';
+
+        await wait(1800);
+        warning.style.opacity = '0';
+
+        await wait(500);
+        splashScreen.style.opacity = '0';
+        
+        mainTitle.classList.add('fade-in-done');
+        mainStart.classList.add('fade-in-done');
+        mainSettings.classList.add('fade-in-done');
+
+        await wait(500);
+        splashScreen.style.display = 'none';
+    });
+
+    function goToHome() {
+      // 画面をタップしたらホーム画面へ！
+      window.location.href = "home.html";
+    }
+
+    function showAuthModal() { document.getElementById('authModal').style.display = 'flex'; }
+    function closeAuthModal() { document.getElementById('authModal').style.display = 'none'; }
+  </script>
+
+  <script>
+    // ▼▼▼ 画面回転制御 (スマホで横持ちを強制する) ▼▼▼
+    function autoRotateTitle() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const isPortrait = h > w;
+
+      if (isPortrait) {
+        document.body.style.position = "fixed";
+        document.body.style.top = "50%";
+        document.body.style.left = "50%";
+        document.body.style.transformOrigin = "center center";
+        document.body.style.transform = "translate(-50%, -50%) rotate(90deg)";
+        document.body.style.width = h + "px";
+        document.body.style.height = w + "px";
+        document.body.style.overflow = "hidden";
+      } else {
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.left = "";
+        document.body.style.transform = "";
+        document.body.style.width = "100vw";
+        document.body.style.height = "100vh";
+      }
+    }
+
+    window.addEventListener('load', autoRotateTitle);
+    window.addEventListener('resize', autoRotateTitle);
+    setTimeout(autoRotateTitle, 100);
+
+    // 右クリック・画像ドラッグ防止
+    document.addEventListener('contextmenu', e => e.preventDefault(), { passive: false });
+    document.addEventListener('dragstart', e => e.preventDefault(), { passive: false });
+  </script>
+</body>
+</html>
