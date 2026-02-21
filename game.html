@@ -11,10 +11,32 @@
         body { font-family: 'SetoFont', "Hiragino Kaku Gothic ProN", sans-serif; background-color: #1e5631; color: #ECDBBF; width: 100vw; height: 100vh; overflow: hidden; display: flex; flex-direction: column; user-select: none; }
         .info-bar { background: rgba(67, 37, 23, 0.9); padding: 10px 20px; display: flex; justify-content: space-between; border-bottom: 3px solid #ECDBBF; z-index: 10; }
         .table-area { flex: 1; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .character-stand { position: absolute; bottom: 120px; left: 10px; height: 40vh; filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); z-index: 1; pointer-events: none; }
-        .score-panel { position: absolute; background: rgba(0,0,0,0.6); border: 2px solid #ECDBBF; padding: 5px 10px; border-radius: 5px; font-weight: bold; text-align: center; z-index: 6; font-size: 1.1rem; }
-        .score-panel.oya { border-color: #ff9800; color: #ff9800; } 
         
+        /* 自分の大きい立ち絵（そのまま残しています） */
+        .character-stand { position: absolute; bottom: 120px; left: 10px; height: 40vh; filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); z-index: 1; pointer-events: none; opacity: 0.8; }
+        
+        /* ==========================================
+           ★ アバター付きスコアパネルのスタイル
+           ========================================== */
+        .score-panel {
+            position: absolute; background: rgba(0,0,0,0.7); border: 2px solid #ECDBBF;
+            padding: 6px; border-radius: 8px; font-weight: bold; text-align: left;
+            z-index: 6; display: flex; align-items: center; gap: 10px; min-width: 140px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .score-panel.oya { border-color: #ff9800; } 
+        .score-panel.oya .score-name { color: #ff9800; }
+
+        .score-avatar {
+            width: 44px; height: 44px; border-radius: 4px; object-fit: cover; object-position: top;
+            border: 1px solid #ECDBBF; background-color: #ECDBBF;
+        }
+        .score-info { display: flex; flex-direction: column; justify-content: center; line-height: 1.2; }
+        .score-name { font-size: 0.85rem; color: #ccc; margin-bottom: 2px; }
+        .score-point { font-size: 1.3rem; color: #fff; }
+        
+        /* ========================================== */
+
         .rivers-container { position: relative; width: 550px; height: 550px; display: grid; grid-template-columns: 170px 210px 170px; grid-template-rows: 170px 210px 170px; justify-items: center; align-items: center; z-index: 5; }
         .river-box { background: rgba(0,0,0,0.3); border: 2px dashed rgba(236, 219, 191, 0.3); border-radius: 8px; padding: 4px; display: flex; align-content: flex-start; position: relative; }
         .river-top { grid-column: 2; grid-row: 1; width: 210px; height: 150px; flex-direction: row-reverse; flex-wrap: wrap-reverse; }
@@ -81,10 +103,25 @@
         </div>
 
         <div class="rivers-container">
-            <div id="score-2" class="score-panel" style="grid-column: 2; grid-row: 1; transform: translateY(-70px);">CPU(前)<br>25000</div>
-            <div id="score-3" class="score-panel" style="grid-column: 1; grid-row: 2; transform: translateX(-50px);">CPU(左)<br>25000</div>
-            <div id="score-1" class="score-panel" style="grid-column: 3; grid-row: 2; transform: translateX(50px);">CPU(右)<br>25000</div>
-            <div id="score-0" class="score-panel" style="grid-column: 2; grid-row: 3; transform: translateY(70px);">あなた<br>25000</div>
+            <div id="score-2" class="score-panel" style="grid-column: 2; grid-row: 1; transform: translateY(-80px);">
+                <img id="avatar-2" class="score-avatar" src="">
+                <div class="score-info"><div class="score-name">CPU2(前)</div><div id="point-2" class="score-point">25000</div></div>
+            </div>
+            
+            <div id="score-3" class="score-panel" style="grid-column: 1; grid-row: 2; transform: translateX(-80px);">
+                <img id="avatar-3" class="score-avatar" src="">
+                <div class="score-info"><div class="score-name">CPU3(左)</div><div id="point-3" class="score-point">25000</div></div>
+            </div>
+            
+            <div id="score-1" class="score-panel" style="grid-column: 3; grid-row: 2; transform: translateX(80px);">
+                <img id="avatar-1" class="score-avatar" src="">
+                <div class="score-info"><div class="score-name">CPU1(右)</div><div id="point-1" class="score-point">25000</div></div>
+            </div>
+            
+            <div id="score-0" class="score-panel" style="grid-column: 2; grid-row: 3; transform: translateY(80px);">
+                <img id="avatar-0" class="score-avatar" src="">
+                <div class="score-info"><div class="score-name">あなた</div><div id="point-0" class="score-point">25000</div></div>
+            </div>
 
             <div class="river-box river-top" id="river-2"></div> 
             <div class="river-box river-left" id="river-3"></div> 
@@ -109,11 +146,12 @@
         let gameState = { kyoku: 1, honba: 0, kyotaku: 0, currentOya: 0, startingOya: 0 };
         let mountain = []; let currentTurn = 0; 
         
+        // ★ 名前はシンプルなものに固定
         let players = [
             { id: 0, name: "あなた", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "human" },
-            { id: 1, name: "CPU(右)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" },
-            { id: 2, name: "CPU(前)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" },
-            { id: 3, name: "CPU(左)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" }
+            { id: 1, name: "CPU1(右)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" },
+            { id: 2, name: "CPU2(前)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" },
+            { id: 3, name: "CPU3(左)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" }
         ];
 
         let isRiichiMode = false; let validRiichiDiscards = []; let pendingNaki = null;
@@ -212,9 +250,17 @@
             document.getElementById('resultTitle').textContent = "終局・最終順位"; document.getElementById('resultYaku').innerHTML = rankText; document.getElementById('resultScore').innerHTML = ""; document.getElementById('btn-next-kyoku').textContent = "ロビーに戻る"; document.getElementById('btn-next-kyoku').onclick = () => window.location.href='index.html'; document.getElementById('resultModal').style.display = 'flex';
         }
 
+        // ★修正：スコアパネル内の特定の文字（得点）だけを更新し、画像が消えないようにする
         function updateScoresUI() {
-            document.getElementById('gameInfoText').textContent = `東${gameState.kyoku}局`; document.getElementById('honbaText').textContent = gameState.honba; document.getElementById('kyotakuText').textContent = gameState.kyotaku * 1000;
-            players.forEach(p => { let panel = document.getElementById(`score-${p.id}`); panel.innerHTML = `${p.name}<br>${p.score}`; if (p.id === gameState.currentOya) panel.classList.add('oya'); else panel.classList.remove('oya'); });
+            document.getElementById('gameInfoText').textContent = `東${gameState.kyoku}局`; 
+            document.getElementById('honbaText').textContent = gameState.honba; 
+            document.getElementById('kyotakuText').textContent = gameState.kyotaku * 1000;
+            players.forEach(p => { 
+                document.getElementById(`point-${p.id}`).textContent = p.score;
+                let panel = document.getElementById(`score-${p.id}`); 
+                if (p.id === gameState.currentOya) panel.classList.add('oya'); 
+                else panel.classList.remove('oya'); 
+            });
         }
 
         function checkMyHand() {
@@ -298,27 +344,31 @@
             document.getElementById('deckCount').textContent = `残り山札: ${mountain.length}枚`; if (currentTurn === 0) checkMyHand();
         }
 
-        // ★追加：ロード時にロビー画面からの情報（localStorage）を受け取る
+        // ★追加：ロード時にロビー画面からの情報をアバターにセット
         window.onload = function() {
             const savedSettings = localStorage.getItem('shioyaMahjongSettings');
             if (savedSettings) {
                 const settings = JSON.parse(savedSettings);
                 
-                // あなたの設定
-                players[0].name = "あなた(" + characterMaster[settings.player].name + ")";
+                // 画像のセット
+                document.getElementById('avatar-0').src = characterMaster[settings.player].img;
+                document.getElementById('avatar-1').src = characterMaster[settings.cpuRight].img;
+                document.getElementById('avatar-2').src = characterMaster[settings.cpuFront].img;
+                document.getElementById('avatar-3').src = characterMaster[settings.cpuLeft].img;
+                
+                // 左下の立ち絵の更新（保持）
                 document.getElementById('playerStandImage').src = characterMaster[settings.player].img;
                 
-                // CPU右の設定
-                players[1].name = characterMaster[settings.cpuRight].name;
+                // AI性格のセット
                 players[1].aiType = characterMaster[settings.cpuRight].aiType;
-
-                // CPU前の設定
-                players[2].name = characterMaster[settings.cpuFront].name;
                 players[2].aiType = characterMaster[settings.cpuFront].aiType;
-
-                // CPU左の設定
-                players[3].name = characterMaster[settings.cpuLeft].name;
                 players[3].aiType = characterMaster[settings.cpuLeft].aiType;
+            } else {
+                // ロビーを通らず直接来た場合のデフォルト画像
+                document.getElementById('avatar-0').src = characterMaster['komiya'].img;
+                document.getElementById('avatar-1').src = characterMaster['char_a'].img;
+                document.getElementById('avatar-2').src = characterMaster['char_b'].img;
+                document.getElementById('avatar-3').src = characterMaster['char_c'].img;
             }
             
             gameState.currentOya = Math.floor(Math.random() * 4); gameState.startingOya = gameState.currentOya;
