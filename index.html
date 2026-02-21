@@ -151,12 +151,12 @@
         let gameState = { kyoku: 1, honba: 0, kyotaku: 0, currentOya: 0, startingOya: 0 };
         let mountain = []; let currentTurn = 0; 
         
-        // ★修正1：各プレイヤーに aiType（性格）を追加
+        // ★修正1：AIテスト用に、各CPUに異なる性格（aiType）を設定
         let players = [
             { id: 0, name: "あなた", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "human" },
-            { id: 1, name: "CPU(右)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" },
-            { id: 2, name: "CPU(前)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" },
-            { id: 3, name: "CPU(左)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" }
+            { id: 1, name: "CPU(右:キャラA)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "menzen" },
+            { id: 2, name: "CPU(前:キャラB)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "naki_safe" },
+            { id: 3, name: "CPU(左:キャラC)", score: 25000, hand: [], river: [], tsumo: null, fulou: [], isRiichi: false, aiType: "damaten" }
         ];
 
         let isRiichiMode = false; let validRiichiDiscards = []; let pendingNaki = null;
@@ -307,7 +307,7 @@
             
             my.score += kyotakuPoints; gameState.kyotaku = 0; nextKyokuState.oyaRenchan = (menfeng === 0);
 
-            let winnerName = winnerIndex === 0 ? "あなた" : players[winnerIndex].name;
+            let winnerName = players[winnerIndex].name;
             let title = type === 'tsumo' ? `🎉 ${winnerName} のツモ！` : `💥 ${winnerName} のロン！`;
             let yakuText = hule.hupai.map(h => `${h.name} ${h.fanshu}翻`).join('<br>');
             let scoreText = `${hule.fu}符 ${hule.fanshu}翻<br><span style="font-size:3.5rem">${hule.defen} 点</span>`;
@@ -456,8 +456,30 @@
             return false; 
         }
 
+        // --- ★追加：AI判定用ヘルパー関数（タンヤオ・役牌チェック） ---
+        function isTanyao(hand, tsumo, fulou, discardedPai) {
+            let allTiles = [...hand];
+            if (tsumo) allTiles.push(tsumo);
+            if (discardedPai) allTiles.push(discardedPai);
+            if (fulou) fulou.forEach(f => allTiles = allTiles.concat(f.tiles));
+            for (let t of allTiles) {
+                if (t.suit === 'z' || t.num === 1 || t.num === 9) return false;
+            }
+            return true;
+        }
+
+        function isYakuhai(tile, cpuIndex) {
+            if (tile.suit !== 'z') return false;
+            if (tile.num >= 5 && tile.num <= 7) return true; // 白・發・中
+            let menfeng = (cpuIndex - gameState.currentOya + 4) % 4; // 0=東,1=南,2=西,3=北
+            let zhuangfeng = 0; // 現在は東場固定
+            if (tile.num === zhuangfeng + 1) return true; // 場風
+            if (tile.num === menfeng + 1) return true;    // 自風
+            return false;
+        }
+
         function checkCPUActions(discarderIndex, discardedPai) {
-            // ロンチェックは全キャラ共通で実行（役がある場合のみアガる）
+            // ロンチェックは全キャラ共通（役があればアガる）
             for (let i = 1; i < 4; i++) {
                 if (i === discarderIndex) continue;
                 let cp = players[i]; let shoupai = Majiang.Shoupai.fromString(getMajiangString(cp.hand, null, cp.fulou));
@@ -475,14 +497,14 @@
                 }
             }
 
-            // 鳴きチェック
+            // 鳴きチェック（キャラ別に分岐）
             for (let i = 1; i < 4; i++) {
                 if (i === discarderIndex) continue;
                 let cp = players[i]; 
                 if (cp.isRiichi) continue;
                 
-                // ★修正2：性格が「menzen」なら鳴き処理を一切行わない
-                if (cp.aiType === "menzen") continue;
+                // ★修正2：キャラA(menzen) と キャラC(damaten) は絶対に鳴かない
+                if (cp.aiType === "menzen" || cp.aiType === "damaten") continue;
                 
                 let handStr = getMajiangString(cp.hand, null, cp.fulou); let shoupai = Majiang.Shoupai.fromString(handStr);
                 let currentShanten = Majiang.Util.xiangting(shoupai);
@@ -502,7 +524,17 @@
                     if (Majiang.Util.xiangting(testShoupai) < currentShanten) { bestNaki = chiList[0]; bestNakiType = 'chii'; }
                 }
 
-                if (bestNaki) { setTimeout(() => executeCPUNaki(i, discarderIndex, discardedPai, bestNakiType, bestNaki), 400); return true; }
+                // ★修正3：キャラB(naki_safe) の場合、役が確定する時だけ鳴く
+                if (bestNaki && cp.aiType === "naki_safe") {
+                    let isSafe = false;
+                    if (bestNakiType === 'pon' && isYakuhai(discardedPai, i)) isSafe = true; // 役牌ポン
+                    else if (isTanyao(cp.hand, null, cp.fulou, discardedPai)) isSafe = true; // タンヤオ確定
+
+                    if (isSafe) {
+                        setTimeout(() => executeCPUNaki(i, discarderIndex, discardedPai, bestNakiType, bestNaki), 400); 
+                        return true;
+                    }
+                }
             }
             return false;
         }
@@ -594,20 +626,14 @@
             let handStr = getMajiangString(p.hand, p.tsumo, p.fulou);
             let shoupai = Majiang.Shoupai.fromString(handStr);
             
-            // ツモアガリができるかチェック
+            // ツモアガリチェック
             if (Majiang.Util.xiangting(shoupai) === -1) {
                 let param = { rule: Majiang.rule(), zhuangfeng: 0, menfeng: (cpuIndex - gameState.currentOya + 4)%4, hupai: { lizhi: p.isRiichi ? 1 : 0 }, baopai: ['m1'], fubaopai: [], jicun: { changbang: 0, lizhibang: 0 } };
                 let hule = Majiang.Util.hule(shoupai, null, param);
-                
                 if (hule) { 
-                    // 役がある場合：見事アガリ！
-                    setTimeout(() => executeAgari('tsumo', cpuIndex, hule), 400); 
-                    return; 
+                    setTimeout(() => executeAgari('tsumo', cpuIndex, hule), 400); return; 
                 } else {
-                    // ★修正3：役なしで手が完成（シャンテン数-1）してしまった場合のセーフティ
-                    // アガれないと悟って、ツモった牌をそのまま捨てて形式テンパイを維持する
-                    discardPai(cpuIndex, p.tsumo, true);
-                    return;
+                    discardPai(cpuIndex, p.tsumo, true); return;
                 }
             }
 
@@ -615,6 +641,7 @@
 
             let allTiles = [...p.hand, p.tsumo];
             let minShanten = 99; let bestTiles = []; let seen = new Set();
+            let simHandForTingpai = null; // リーチ判定用に一番良い手の形を保存
 
             for (let tile of allTiles) {
                 let key = tile.suit + tile.num;
@@ -622,7 +649,9 @@
                     seen.add(key);
                     let simHand = allTiles.filter(t => t.id !== tile.id);
                     let s = Majiang.Util.xiangting(Majiang.Shoupai.fromString(getMajiangString(simHand, null, p.fulou)));
-                    if (s < minShanten) { minShanten = s; bestTiles = [tile]; }
+                    if (s < minShanten) { 
+                        minShanten = s; bestTiles = [tile]; simHandForTingpai = simHand; 
+                    }
                     else if (s === minShanten) { bestTiles.push(tile); }
                 }
             }
@@ -634,10 +663,30 @@
             let chosenPai = candidates[Math.floor(Math.random() * candidates.length)];
             let isTsumo = (chosenPai.id === p.tsumo.id);
 
-            // 門前でテンパイ（シャンテン数0）なら即リーチをかける
+            // ★修正4：リーチ判定（キャラ別に分岐）
             if (minShanten === 0 && p.fulou.length === 0 && p.score >= 1000) {
-                p.isRiichi = true; p.score -= 1000; gameState.kyotaku++;
-                chosenPai.isRiichiDeclare = true; updateScoresUI();
+                let shouldRiichi = true;
+                
+                // キャラC(damaten) の場合、すでに役があればダマテンにする
+                if (p.aiType === "damaten") {
+                    let tingpaiList = Majiang.Util.tingpai(Majiang.Shoupai.fromString(getMajiangString(simHandForTingpai, null, []))) || [];
+                    if (tingpaiList.length > 0) {
+                        // 待ち牌の1つ目を「ロンしたと仮定」して役を計算する
+                        let testRongpai = tingpaiList[0] + '+'; 
+                        let testShoupai = Majiang.Shoupai.fromString(getMajiangString(simHandForTingpai, null, []));
+                        let param = { rule: Majiang.rule(), zhuangfeng: 0, menfeng: (cpuIndex - gameState.currentOya + 4)%4, hupai: { lizhi: 0 }, baopai: ['m1'], fubaopai: [], jicun: { changbang: 0, lizhibang: 0 } };
+                        let hule = Majiang.Util.hule(testShoupai, testRongpai, param);
+                        
+                        if (hule) {
+                            shouldRiichi = false; // 役がある！リーチしない（ヤミテン）
+                        }
+                    }
+                }
+
+                if (shouldRiichi) {
+                    p.isRiichi = true; p.score -= 1000; gameState.kyotaku++;
+                    chosenPai.isRiichiDeclare = true; updateScoresUI();
+                }
             }
 
             discardPai(cpuIndex, chosenPai, isTsumo);
